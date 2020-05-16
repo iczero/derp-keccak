@@ -19,30 +19,26 @@ pub const ROTATION_OFFSETS: [u8; 25] = [
     18, 2, 61, 56, 14
 ];
 
-pub const PI_TRANSFORM: [(usize, usize); 25] = [
-    (0, 0), (1, 10), (2, 20), (3, 5), (4, 15),
-    (5, 16), (6, 1), (7, 11), (8, 21), (9, 6),
-    (10, 7), (11, 17), (12, 2), (13, 12), (14, 22),
-    (15, 23), (16, 8), (17, 18), (18, 3), (19, 13),
-    (20, 14), (21, 24), (22, 9), (23, 19), (24, 4)
+pub const PI_TRANSFORM: [usize; 25] = [
+    0, 10, 20, 5, 15,
+    16, 1, 11, 21, 6,
+    7, 17, 2, 12, 22,
+    23, 8, 18, 3, 13,
+    14, 24, 9, 19, 4
 ];
 
-
-// n mod b
-fn modulo(n: i8, b: i8) -> u8 {
-    let r = n % b;
-    if r < 0 { (r + b) as u8 }
-    else { r as u8 }
+fn xytoi(x: u8, y: u8) -> usize {
+    (y * 5 + x) as usize
 }
 
-fn xytoi(x: i8, y: i8) -> usize {
-    let mx = modulo(x, 5);
-    let my = modulo(y, 5);
+fn xytoi_mod(x: u8, y: u8) -> usize {
+    let mx = x % 5;
+    let my = y % 5;
     (my * 5 + mx) as usize
 }
 
-fn itoxy(i: usize) -> (i8, i8) {
-    (i as i8 % 5, i as i8 / 5)
+fn itoxy(i: usize) -> (u8, u8) {
+    (i as u8 % 5, i as u8 / 5)
 }
 
 fn rotl(n: u64, r: u8) -> u64 {
@@ -53,7 +49,7 @@ fn rotl(n: u64, r: u8) -> u64 {
 pub type KeccakStateArray = [u64; 25];
 
 pub fn keccakf(a: &mut KeccakStateArray) {
-    for i in 0..24 { keccak_round(a, ROUND_CONSTANTS[i]); }
+    for rc in ROUND_CONSTANTS.iter() { keccak_round(a, *rc); }
 }
 
 pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
@@ -62,26 +58,26 @@ pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
     let mut d = [0u64; 5];
 
     // theta step
-    for x in 0..5 {
-        c[x] = a[xytoi(x as i8, 0)] ^ a[xytoi(x as i8, 1)] ^
-            a[xytoi(x as i8, 2)] ^ a[xytoi(x as i8, 3)] ^ a[xytoi(x as i8, 4)]
+    for (x, val) in c.iter_mut().enumerate() {
+        *val = a[xytoi(x as u8, 0)] ^ a[xytoi(x as u8, 1)] ^
+            a[xytoi(x as u8, 2)] ^ a[xytoi(x as u8, 3)] ^ a[xytoi(x as u8, 4)]
     }
-    for x in 0..5 {
-        d[x] = c[(x + 4) % 5] ^ rotl(c[(x + 1) % 5], 1);
+    for (x, val) in d.iter_mut().enumerate() {
+        *val = c[(x + 4) % 5] ^ rotl(c[(x + 1) % 5], 1);
     }
-    for i in 0..25 {
-        a[i] ^= d[i % 5];
+    for (i, val) in a.iter_mut().enumerate() {
+        *val ^= d[i % 5];
     }
 
     // rho and pi steps
-    for (from, to) in PI_TRANSFORM.iter() {
-        b[*to] = rotl(a[*from], ROTATION_OFFSETS[*from]);
+    for (from, val) in a.iter().enumerate() {
+        b[PI_TRANSFORM[from]] = rotl(*val, ROTATION_OFFSETS[from]);
     }
 
     // chi step
-    for i in 0..25 {
+    for (i, val) in a.iter_mut().enumerate() {
         let (x, y) = itoxy(i);
-        a[i] = b[i] ^ (!b[xytoi(x + 1, y)] & b[xytoi(x + 2, y)]);
+        *val = b[i] ^ (!b[xytoi_mod(x + 1, y)] & b[xytoi_mod(x + 2, y)]);
     }
 
     // iota step
