@@ -76,8 +76,18 @@ pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
 
     // chi step
     for (i, val) in a.iter_mut().enumerate() {
+        /*
         let (x, y) = itoxy(i);
         *val = b[i] ^ (!b[xytoi_mod(x + 1, y)] & b[xytoi_mod(x + 2, y)]);
+        */
+        /*
+        let j = i as u8;
+        *val = b[i] ^ (!b[xytoi((j + 1) % 5, j / 5)] &
+            b[xytoi((j + 2) % 5, j / 5)]);
+        */
+        // this is going into microoptimizations territory
+        *val = b[i] ^ (!b[(i + 1) % 5 + (i / 5 * 5)] &
+            b[(i + 2) % 5 + (i / 5 * 5)]);
     }
 
     // iota step
