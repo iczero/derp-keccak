@@ -1,5 +1,3 @@
-use byterepr::ByteRepr;
-
 pub const ROUND_CONSTANTS: [u64; 24] = [
     0x0000000000000001, 0x0000000000008082, 0x800000000000808A,
     0x8000000080008000, 0x000000000000808B, 0x0000000080000001,
@@ -41,11 +39,6 @@ fn itoxy(i: usize) -> (u8, u8) {
     (i as u8 % 5, i as u8 / 5)
 }
 
-fn rotl(n: u64, r: u8) -> u64 {
-    if r == 0 { return n; }
-    (n << r) | (n >> (64 - r))
-}
-
 pub type KeccakStateArray = [u64; 25];
 
 pub fn keccakf(a: &mut KeccakStateArray) {
@@ -58,43 +51,128 @@ pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
     let mut d = [0u64; 5];
 
     // theta step
-    for (x, val) in c.iter_mut().enumerate() {
-        *val = a[xytoi(x as u8, 0)] ^ a[xytoi(x as u8, 1)] ^
-            a[xytoi(x as u8, 2)] ^ a[xytoi(x as u8, 3)] ^ a[xytoi(x as u8, 4)]
+    for i in 0..5 {
+        c[i] = a[i] ^ a[i + 5] ^ a[i + 10] ^ a[i + 15] ^ a[i + 20];
     }
-    for (x, val) in d.iter_mut().enumerate() {
-        *val = c[(x + 4) % 5] ^ rotl(c[(x + 1) % 5], 1);
+
+    for i in 0..5 {
+        d[i] = c[(i + 1) % 5].rotate_left(1);
+        d[i] ^= c[(i + 4) % 5];
     }
-    for (i, val) in a.iter_mut().enumerate() {
-        *val ^= d[i % 5];
+
+    for i in 0..25 {
+        a[i] ^= d[i % 5];
     }
 
     // rho and pi steps
-    for (from, val) in a.iter().enumerate() {
-        b[PI_TRANSFORM[from]] = rotl(*val, ROTATION_OFFSETS[from]);
-    }
+    b[0] = a[0].rotate_left(0);
+    b[10] = a[1].rotate_left(1);
+    b[20] = a[2].rotate_left(62);
+    b[5] = a[3].rotate_left(28);
+    b[15] = a[4].rotate_left(27);
+    b[16] = a[5].rotate_left(36);
+    b[1] = a[6].rotate_left(44);
+    b[11] = a[7].rotate_left(6);
+    b[21] = a[8].rotate_left(55);
+    b[6] = a[9].rotate_left(20);
+    b[7] = a[10].rotate_left(3);
+    b[17] = a[11].rotate_left(10);
+    b[2] = a[12].rotate_left(43);
+    b[12] = a[13].rotate_left(25);
+    b[22] = a[14].rotate_left(39);
+    b[23] = a[15].rotate_left(41);
+    b[8] = a[16].rotate_left(45);
+    b[18] = a[17].rotate_left(15);
+    b[3] = a[18].rotate_left(21);
+    b[13] = a[19].rotate_left(8);
+    b[14] = a[20].rotate_left(18);
+    b[24] = a[21].rotate_left(2);
+    b[9] = a[22].rotate_left(61);
+    b[19] = a[23].rotate_left(56);
+    b[4] = a[24].rotate_left(14);
 
     // chi step
-    for (i, val) in a.iter_mut().enumerate() {
-        /*
-        let (x, y) = itoxy(i);
-        *val = b[i] ^ (!b[xytoi_mod(x + 1, y)] & b[xytoi_mod(x + 2, y)]);
-        */
-        /*
-        let j = i as u8;
-        *val = b[i] ^ (!b[xytoi((j + 1) % 5, j / 5)] &
-            b[xytoi((j + 2) % 5, j / 5)]);
-        */
-        // this is going into microoptimizations territory
-        *val = b[i] ^ (!b[(i + 1) % 5 + (i / 5 * 5)] &
-            b[(i + 2) % 5 + (i / 5 * 5)]);
-    }
+    a[0] = !b[1];
+    a[0] &= b[2];
+    a[0] ^= b[0];
+    a[1] = !b[2];
+    a[1] &= b[3];
+    a[1] ^= b[1];
+    a[2] = !b[3];
+    a[2] &= b[4];
+    a[2] ^= b[2];
+    a[3] = !b[4];
+    a[3] &= b[0];
+    a[3] ^= b[3];
+    a[4] = !b[0];
+    a[4] &= b[1];
+    a[4] ^= b[4];
+    a[5] = !b[6];
+    a[5] &= b[7];
+    a[5] ^= b[5];
+    a[6] = !b[7];
+    a[6] &= b[8];
+    a[6] ^= b[6];
+    a[7] = !b[8];
+    a[7] &= b[9];
+    a[7] ^= b[7];
+    a[8] = !b[9];
+    a[8] &= b[5];
+    a[8] ^= b[8];
+    a[9] = !b[5];
+    a[9] &= b[6];
+    a[9] ^= b[9];
+    a[10] = !b[11];
+    a[10] &= b[12];
+    a[10] ^= b[10];
+    a[11] = !b[12];
+    a[11] &= b[13];
+    a[11] ^= b[11];
+    a[12] = !b[13];
+    a[12] &= b[14];
+    a[12] ^= b[12];
+    a[13] = !b[14];
+    a[13] &= b[10];
+    a[13] ^= b[13];
+    a[14] = !b[10];
+    a[14] &= b[11];
+    a[14] ^= b[14];
+    a[15] = !b[16];
+    a[15] &= b[17];
+    a[15] ^= b[15];
+    a[16] = !b[17];
+    a[16] &= b[18];
+    a[16] ^= b[16];
+    a[17] = !b[18];
+    a[17] &= b[19];
+    a[17] ^= b[17];
+    a[18] = !b[19];
+    a[18] &= b[15];
+    a[18] ^= b[18];
+    a[19] = !b[15];
+    a[19] &= b[16];
+    a[19] ^= b[19];
+    a[20] = !b[21];
+    a[20] &= b[22];
+    a[20] ^= b[20];
+    a[21] = !b[22];
+    a[21] &= b[23];
+    a[21] ^= b[21];
+    a[22] = !b[23];
+    a[22] &= b[24];
+    a[22] ^= b[22];
+    a[23] = !b[24];
+    a[23] &= b[20];
+    a[23] ^= b[23];
+    a[24] = !b[20];
+    a[24] &= b[21];
+    a[24] ^= b[24];
 
     // iota step
     a[0] ^= rc;
 }
 
-pub fn pad_bits(block_size: usize, bytes: &Vec<u8>, bits: u8, bit_length: u8) -> Vec<u8> {
+pub fn pad_bits(block_size: usize, bytes: &[u8], bits: u8, bit_length: u8) -> Vec<u8> {
     let total_bit_length = bytes.len() * 8 + bit_length as usize;
     let mut padding_needed = block_size - (total_bit_length % block_size);
     if padding_needed == 1 { padding_needed += block_size; } // must have at least 2 bytes of padding
@@ -132,18 +210,29 @@ impl Keccak {
         keccakf(&mut self.state);
     }
 
-    pub fn absorb_bits(&mut self, r: usize, bytes: &Vec<u8>, bits: u8, bit_length: u8) {
+    pub fn absorb_direct(&mut self, r: usize, buf: &[u8]) {
+        assert!(r % 64 == 0, "bitrate must be a multiple of 64");
+        assert!(r <= 1600, "bitrate exceeds state length");
+        assert!(buf.len() == r / 8, "incorrect block size for bitrate");
+        unsafe { self.absorb_direct_unchecked(buf); }
+    }
+
+    pub unsafe fn absorb_direct_unchecked(&mut self, buf: &[u8]) {
+        for (idx, val) in buf.as_chunks_unchecked::<8>().iter().enumerate() {
+            let pos = self.state.get_unchecked_mut(idx);
+            *pos = *pos ^ u64::from_le_bytes(*val);
+        }
+        self.keccakf();
+    }
+
+    pub fn absorb_bits(&mut self, r: usize, bytes: &[u8], bits: u8, bit_length: u8) {
         let padded = pad_bits(r, bytes, bits, bit_length);
         for i in (0..padded.len()).step_by(r / 8) {
-            for j in 0..(r / 64)  {
-                let start: usize = i + j * 8;
-                self.state[j] ^= <u64 as ByteRepr>::from_le_bytes(&padded[start..(start + 8)]);
-            }
-            self.keccakf();
+            self.absorb_direct(r, &padded);
         }
     }
 
-    pub fn absorb(&mut self, r: usize, bytes: &Vec<u8>) {
+    pub fn absorb(&mut self, r: usize, bytes: &[u8]) {
         self.absorb_bits(r, bytes, 0, 0);
     }
 
@@ -155,7 +244,7 @@ impl Keccak {
         for i in (0..byte_len).step_by(byte_rate) {
             for j in 0..(r / 64) {
                 let start: usize = i + j * 8;
-                self.state[j].copy_to_le_bytes(&mut buf[start..(start + 8)]);
+                (&mut buf[start..(start + 8)]).copy_from_slice(&self.state[j].to_le_bytes());
             }
             self.keccakf();
         }

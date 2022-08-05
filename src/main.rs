@@ -1,31 +1,49 @@
+#![feature(slice_as_chunks)]
 mod keccak;
 use keccak::Keccak;
-// use std::io::prelude::*;
-use tokio::prelude::*;
+use tokio;
+use tokio::io::{BufReader, AsyncReadExt};
+use anyhow;
+
+const HEX_DIGITS: [char; 16] = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+    'a', 'b', 'c', 'd', 'e', 'f'
+];
+// ecks dee
+fn buf_to_string(buf: &[u8]) -> String {
+    let mut out = String::with_capacity(buf.len() * 2);
+    for i in 0..buf.len() {
+        out.push(HEX_DIGITS[(buf[i] >> 4) as usize]);
+        out.push(HEX_DIGITS[(buf[i] & 0xf) as usize]);
+    }
+    out
+}
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let mut keccak = Keccak::new();
 
-    let file: Vec<u8> = tokio::fs::read("input.txt").await.unwrap();
+    let mut stdin = BufReader::new(tokio::io::stdin());
+    let bitrate = 1088;
+    let byterate = bitrate / 8;
+    let mut buf: Vec<u8> = Vec::with_capacity(byterate);
+    buf.resize(byterate, 0);
 
-    /*
-    keccak.absorb_bits(1088, &file, 0b10, 2);
-    println!("hash: {:x?}", keccak.squeeze(1088, 256 / 8));
-    */
-    // /*
-    for _i in 0..1000000 {
-        keccak.clear();
-        keccak.absorb_bits(1088, &file, 0b10, 2);
-        keccak.squeeze(1088, 256 / 8);
-    }
-    // */
-    
-    /*
-    keccak.absorb(512, &file);
-    let mut stdout = tokio::io::stdout();
+    let mut read_offset: usize = 0;
     loop {
-        stdout.write_all(&keccak.squeeze(512, 4096)).await.unwrap();
+        let len = stdin.read(&mut buf[read_offset..]).await?;
+        if len + read_offset == byterate {
+            unsafe { keccak.absorb_direct_unchecked(&buf); }
+            read_offset = 0;
+        } else if len == 0 {
+            keccak.absorb_bits(bitrate, &buf[0..read_offset], 0b10, 2);
+            break;
+        } else {
+            read_offset += len;
+        }
     }
-    */
+
+    let out = keccak.squeeze(bitrate, 256 / 8);
+    println!("{}", buf_to_string(&out));
+    Ok(())
 }
