@@ -11,8 +11,31 @@ pub const ROUND_CONSTANTS: [u64; 24] = [
 
 pub type KeccakStateArray = [u64; 25];
 
-pub fn keccakf(a: &mut KeccakStateArray) {
-    for rc in ROUND_CONSTANTS.iter() { keccak_round(a, *rc); }
+// this is necessary to unroll loops
+pub fn keccakf(a: &mut KeccakStateArray, rounds: usize) {
+    match rounds {
+        12 => keccakf_const::<12>(a),
+        13 => keccakf_const::<13>(a),
+        14 => keccakf_const::<14>(a),
+        15 => keccakf_const::<15>(a),
+        16 => keccakf_const::<16>(a),
+        17 => keccakf_const::<17>(a),
+        18 => keccakf_const::<18>(a),
+        19 => keccakf_const::<19>(a),
+        20 => keccakf_const::<20>(a),
+        21 => keccakf_const::<21>(a),
+        22 => keccakf_const::<22>(a),
+        23 => keccakf_const::<23>(a),
+        24 => keccakf_const::<24>(a),
+        _ => unimplemented!(),
+    }
+}
+
+#[inline]
+pub fn keccakf_const<const ROUNDS: usize>(a: &mut KeccakStateArray) {
+    for rc in ROUND_CONSTANTS[(24 - ROUNDS)..].iter() {
+        keccak_round(a, *rc);
+    }
 }
 
 pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
@@ -40,21 +63,25 @@ pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
     b[20] = a[2].rotate_left(62);
     b[5] = a[3].rotate_left(28);
     b[15] = a[4].rotate_left(27);
+
     b[16] = a[5].rotate_left(36);
     b[1] = a[6].rotate_left(44);
     b[11] = a[7].rotate_left(6);
     b[21] = a[8].rotate_left(55);
     b[6] = a[9].rotate_left(20);
+
     b[7] = a[10].rotate_left(3);
     b[17] = a[11].rotate_left(10);
     b[2] = a[12].rotate_left(43);
     b[12] = a[13].rotate_left(25);
     b[22] = a[14].rotate_left(39);
+
     b[23] = a[15].rotate_left(41);
     b[8] = a[16].rotate_left(45);
     b[18] = a[17].rotate_left(15);
     b[3] = a[18].rotate_left(21);
     b[13] = a[19].rotate_left(8);
+
     b[14] = a[20].rotate_left(18);
     b[24] = a[21].rotate_left(2);
     b[9] = a[22].rotate_left(61);
@@ -96,7 +123,7 @@ pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
     a[0] ^= rc;
 }
 
-pub fn pad_bits(block_size: usize, bytes: &[u8], bits: u8, bit_length: u8) -> Vec<u8> {
+pub fn pad10_1(block_size: usize, bytes: &[u8], bits: u8, bit_length: u8) -> Vec<u8> {
     let total_bit_length = bytes.len() * 8 + bit_length as usize;
     let mut padding_needed = block_size - (total_bit_length % block_size);
     if padding_needed == 1 { padding_needed += block_size; } // must have at least 2 bytes of padding
@@ -117,21 +144,23 @@ pub fn pad_bits(block_size: usize, bytes: &[u8], bits: u8, bit_length: u8) -> Ve
     padded_buf
 }
 
-pub fn pad(block_size: usize, bytes: &Vec<u8>) -> Vec<u8> {
-    pad_bits(block_size, bytes, 0, 0)
-}
-
 pub struct Keccak {
-    state: KeccakStateArray
+    pub state: KeccakStateArray,
+    pub rounds: usize
 }
 
 impl Keccak {
     pub fn new() -> Keccak {
-        Keccak { state: [0u64; 25] }
+        Keccak { state: [0u64; 25], rounds: 24 }
+    }
+
+    pub fn with_rounds(rounds: usize) -> Keccak {
+        assert!(rounds <= ROUND_CONSTANTS.len(), "too many rounds");
+        Keccak { state: [0u64; 25], rounds }
     }
 
     pub fn keccakf(&mut self) {
-        keccakf(&mut self.state);
+        keccakf(&mut self.state, self.rounds);
     }
 
     pub fn absorb_direct(&mut self, r: usize, buf: &[u8]) {
@@ -150,8 +179,8 @@ impl Keccak {
     }
 
     pub fn absorb_bits(&mut self, r: usize, bytes: &[u8], bits: u8, bit_length: u8) {
-        let padded = pad_bits(r, bytes, bits, bit_length);
-        for i in (0..padded.len()).step_by(r / 8) {
+        let padded = pad10_1(r, bytes, bits, bit_length);
+        for _ in (0..padded.len()).step_by(r / 8) {
             self.absorb_direct(r, &padded);
         }
     }

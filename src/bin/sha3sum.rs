@@ -1,9 +1,8 @@
-#![feature(slice_as_chunks)]
-mod keccak;
-use keccak::Keccak;
 use tokio;
 use tokio::io::{BufReader, AsyncReadExt};
 use anyhow;
+
+use keccak::Keccak;
 
 const HEX_DIGITS: [char; 16] = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
