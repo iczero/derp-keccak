@@ -1,5 +1,6 @@
-use tokio;
-use tokio::io::{BufReader, AsyncReadExt};
+#![feature(slice_as_chunks)]
+use std::io::{BufReader, Read};
+
 use anyhow;
 
 use keccak::Keccak;
@@ -18,11 +19,10 @@ fn buf_to_string(buf: &[u8]) -> String {
     out
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let mut keccak = Keccak::new();
 
-    let mut stdin = BufReader::new(tokio::io::stdin());
+    let mut stdin = BufReader::new(std::io::stdin());
     let bitrate = 1088;
     let byterate = bitrate / 8;
     let mut buf: Vec<u8> = Vec::with_capacity(byterate);
@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut read_offset: usize = 0;
     loop {
-        let len = stdin.read(&mut buf[read_offset..]).await?;
+        let len = stdin.read(&mut buf[read_offset..])?;
         if len + read_offset == byterate {
             unsafe { keccak.absorb_direct_unchecked(&buf); }
             read_offset = 0;
