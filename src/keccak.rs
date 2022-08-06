@@ -11,29 +11,8 @@ pub const ROUND_CONSTANTS: [u64; 24] = [
 
 pub type KeccakStateArray = [u64; 25];
 
-// this is necessary to unroll loops
 pub fn keccakf(a: &mut KeccakStateArray, rounds: usize) {
-    match rounds {
-        12 => keccakf_const::<12>(a),
-        13 => keccakf_const::<13>(a),
-        14 => keccakf_const::<14>(a),
-        15 => keccakf_const::<15>(a),
-        16 => keccakf_const::<16>(a),
-        17 => keccakf_const::<17>(a),
-        18 => keccakf_const::<18>(a),
-        19 => keccakf_const::<19>(a),
-        20 => keccakf_const::<20>(a),
-        21 => keccakf_const::<21>(a),
-        22 => keccakf_const::<22>(a),
-        23 => keccakf_const::<23>(a),
-        24 => keccakf_const::<24>(a),
-        _ => unimplemented!(),
-    }
-}
-
-#[inline]
-pub fn keccakf_const<const ROUNDS: usize>(a: &mut KeccakStateArray) {
-    for rc in ROUND_CONSTANTS[(24 - ROUNDS)..].iter() {
+    for rc in ROUND_CONSTANTS.iter().skip(24 - rounds) {
         keccak_round(a, *rc);
     }
 }
