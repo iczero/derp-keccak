@@ -102,10 +102,10 @@ pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
     a[0] ^= rc;
 }
 
-pub fn pad10_1(block_size: usize, bytes: &[u8], bits: u8, bit_length: u8) -> Vec<u8> {
+pub fn pad10_1(block_size_bits: usize, bytes: &[u8], bits: u8, bit_length: u8) -> Vec<u8> {
     let total_bit_length = bytes.len() * 8 + bit_length as usize;
-    let mut padding_needed = block_size - (total_bit_length % block_size);
-    if padding_needed == 1 { padding_needed += block_size; } // must have at least 2 bytes of padding
+    let mut padding_needed = block_size_bits - (total_bit_length % block_size_bits);
+    if padding_needed < 2 { padding_needed += block_size_bits; } // must have at least 2 bytes of padding
     let capacity = (total_bit_length + padding_needed) / 8;
     let mut padded_buf: Vec<u8> = Vec::with_capacity(capacity);
     padded_buf.resize(capacity, 0u8);
@@ -113,13 +113,11 @@ pub fn pad10_1(block_size: usize, bytes: &[u8], bits: u8, bit_length: u8) -> Vec
     if bit_length != 0 {
         padded_buf[bytes.len()] = bits & (2u8.pow(bit_length as u32) - 1); 
     }
-    if padding_needed != 0 {
-        // pad10*1 first bit
-        padded_buf[bytes.len()] |= 2u8.pow(bit_length as u32);
-        // pad10*1 last bit
-        let pad_end = padded_buf.len() - 1;
-        padded_buf[pad_end] |= 0x80;
-    }
+    // pad10*1 first bit
+    padded_buf[bytes.len()] |= 2u8.pow(bit_length as u32);
+    // pad10*1 last bit
+    let pad_end = padded_buf.len() - 1;
+    padded_buf[pad_end] |= 0x80;
     padded_buf
 }
 
