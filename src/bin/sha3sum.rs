@@ -1,19 +1,7 @@
 #![feature(slice_as_chunks)]
-use std::io::{BufReader, Read};
+use derp_keccak::util::bytes_to_hex;
 use derp_keccak::Keccak;
-
-const HEX_DIGITS: [char; 16] = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-];
-// ecks dee
-fn buf_to_string(buf: &[u8]) -> String {
-    let mut out = String::with_capacity(buf.len() * 2);
-    for i in 0..buf.len() {
-        out.push(HEX_DIGITS[(buf[i] >> 4) as usize]);
-        out.push(HEX_DIGITS[(buf[i] & 0xf) as usize]);
-    }
-    out
-}
+use std::io::{BufReader, Read};
 
 fn main() -> anyhow::Result<()> {
     let mut keccak = Keccak::new();
@@ -41,7 +29,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let out = keccak.squeeze(bitrate, 256 / 8);
-    println!("{}", buf_to_string(&out));
+    println!("{}", bytes_to_hex(&out));
     Ok(())
 }
 
