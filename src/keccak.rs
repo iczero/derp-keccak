@@ -89,25 +89,25 @@ pub fn keccak_round(a: &mut KeccakStateArray, rc: u64) {
     a[2] = (!b[3] & b[4]) ^ b[2];
     a[3] = (!b[4] & b[0]) ^ b[3];
     a[4] = (!b[0] & b[1]) ^ b[4];
-    
+
     a[5] = (!b[6] & b[7]) ^ b[5];
     a[6] = (!b[7] & b[8]) ^ b[6];
     a[7] = (!b[8] & b[9]) ^ b[7];
     a[8] = (!b[9] & b[5]) ^ b[8];
     a[9] = (!b[5] & b[6]) ^ b[9];
-    
+
     a[10] = (!b[11] & b[12]) ^ b[10];
     a[11] = (!b[12] & b[13]) ^ b[11];
     a[12] = (!b[13] & b[14]) ^ b[12];
     a[13] = (!b[14] & b[10]) ^ b[13];
     a[14] = (!b[10] & b[11]) ^ b[14];
-    
+
     a[15] = (!b[16] & b[17]) ^ b[15];
     a[16] = (!b[17] & b[18]) ^ b[16];
     a[17] = (!b[18] & b[19]) ^ b[17];
     a[18] = (!b[19] & b[15]) ^ b[18];
     a[19] = (!b[15] & b[16]) ^ b[19];
-    
+
     a[20] = (!b[21] & b[22]) ^ b[20];
     a[21] = (!b[22] & b[23]) ^ b[21];
     a[22] = (!b[23] & b[24]) ^ b[22];
@@ -122,7 +122,7 @@ pub fn pad10_1(block_size_bits: usize, bytes: &[u8], bits: u8, bit_length: u8) -
     let total_bit_length = bytes.len() * 8 + bit_length as usize;
     let mut padding_needed = block_size_bits - (total_bit_length % block_size_bits);
     if padding_needed < 2 {
-         // must have at least 2 bytes of padding
+        // must have at least 2 bytes of padding
         padding_needed += block_size_bits;
     }
 
@@ -170,22 +170,39 @@ impl Keccak {
         keccakf(&mut self.state, self.rounds);
     }
 
-    pub fn absorb_direct(&mut self, r: usize, buf: &[u8]) {
-        assert!(r % 64 == 0, "bitrate must be a multiple of 64");
-        assert!(r <= 1600, "bitrate exceeds state length");
-        assert!(buf.len() == r / 8, "incorrect block size for bitrate");
-        unsafe {
-            self.absorb_direct_unchecked(buf);
-        }
-    }
+    // invariants for the following two functions:
+    // - buf.len() must be a multiple of 8 bytes
+    // - buf.len() must not be more than 200 bytes (length of internal state)
+    // additionally, you MUST call keccakf() or everything will be broken
+    // (see absorb_direct_unchecked and squeeze_direct_unchecked)
 
-    // safety note: you should probably just use absorb_direct
-    pub unsafe fn absorb_direct_unchecked(&mut self, buf: &[u8]) {
+    pub unsafe fn state_insert_bytes_unchecked(&mut self, buf: &[u8]) {
         for (idx, val) in buf.as_chunks_unchecked::<8>().iter().enumerate() {
             let pos = self.state.get_unchecked_mut(idx);
             *pos = *pos ^ u64::from_le_bytes(*val);
         }
+    }
+
+    pub unsafe fn state_extract_bytes_unchecked(&mut self, buf: &mut [u8]) {
+        for i in 0..buf.len() / 8 {
+            let byte_idx = i * 8;
+            buf.get_unchecked_mut(byte_idx..byte_idx + 8)
+                .copy_from_slice(&self.state.get_unchecked(i).to_le_bytes());
+        }
+    }
+
+    pub unsafe fn absorb_block_unchecked(&mut self, buf: &[u8]) {
+        self.state_insert_bytes_unchecked(buf);
         self.keccakf();
+    }
+
+    pub fn absorb_block(&mut self, r: usize, buf: &[u8]) {
+        assert!(r % 64 == 0, "bitrate must be a multiple of 64");
+        assert!(r <= 1600, "bitrate exceeds state length");
+        assert!(buf.len() == r / 8, "incorrect block size for bitrate");
+        unsafe {
+            self.absorb_block_unchecked(buf);
+        }
     }
 
     pub fn absorb_padded(&mut self, r: usize, bytes: &[u8], bits: u8, bit_length: u8) {
@@ -196,7 +213,9 @@ impl Keccak {
         if bytes.len() == 0 {
             // we were told to absorb nothing, absorb padding block
             let pad_block = pad10_1(r, &[], bits, bit_length);
-            unsafe { self.absorb_direct_unchecked(&pad_block); }
+            unsafe {
+                self.absorb_block_unchecked(&pad_block);
+            }
             return;
         }
 
@@ -206,37 +225,64 @@ impl Keccak {
             unsafe {
                 let byte_idx = i * r / 8;
                 let block = &bytes[byte_idx..byte_idx + r / 8];
-                self.absorb_direct_unchecked(block);
+                self.absorb_block_unchecked(block);
             }
         }
         // pad and absorb last block
         let padded = pad10_1(r, bytes, bits, bit_length);
         for block in padded.chunks(r / 8) {
-            unsafe { self.absorb_direct_unchecked(block); }
+            unsafe {
+                self.absorb_block_unchecked(block);
+            }
         }
     }
 
-    pub fn squeeze_direct(&mut self, r: usize, dest: &mut [u8]) {
+    pub unsafe fn squeeze_block_unchecked(&mut self, buf: &mut [u8]) {
+        self.state_extract_bytes_unchecked(buf);
+        self.keccakf();
+    }
+
+    pub fn squeeze_block(&mut self, r: usize, dest: &mut [u8]) {
         assert!(r % 64 == 0, "bitrate must be a multiple of 64");
         assert!(r <= 1600, "bitrate exceeds state length");
-        assert!(dest.len() == r / 8, "destination length does not match bitrate");
-        for i in 0..r / 64 {
-            let byte_idx = i * 8;
-            dest[byte_idx..byte_idx + 8].copy_from_slice(&self.state[i].to_le_bytes());
+        assert!(
+            dest.len() == r / 8,
+            "destination length does not match bitrate"
+        );
+        unsafe {
+            self.state_extract_bytes_unchecked(dest);
         }
+        self.keccakf();
     }
 
-    pub fn squeeze(&mut self, r: usize, byte_len: usize) -> Vec<u8> {
+    pub fn squeeze_many(&mut self, r: usize, byte_len: usize) -> Vec<u8> {
         let byte_rate = r / 8;
         let buf_capacity: usize = ((byte_len + byte_rate - 1) / byte_rate) * byte_rate;
         let mut buf: Vec<u8> = Vec::with_capacity(buf_capacity);
         buf.resize(buf_capacity, 0u8);
         for i in (0..byte_len).step_by(byte_rate) {
-            self.squeeze_direct(r, &mut buf[i..i + byte_rate]);
-            self.keccakf();
+            self.squeeze_block(r, &mut buf[i..i + byte_rate]);
         }
         buf.truncate(byte_len);
         buf
+    }
+
+    pub fn duplex_block(&mut self, r: usize, squeeze_to: &mut [u8], absorb_from: &[u8]) {
+        assert!(r % 64 == 0, "bitrate must be a multiple of 64");
+        assert!(r <= 1600, "bitrate exceeds state length");
+        assert!(
+            squeeze_to.len() == r / 8,
+            "destination length does not match bitrate"
+        );
+        assert!(
+            absorb_from.len() == r / 8,
+            "source length does not match bitrate"
+        );
+        unsafe {
+            self.state_extract_bytes_unchecked(squeeze_to);
+            self.state_insert_bytes_unchecked(absorb_from);
+        }
+        self.keccakf();
     }
 
     pub fn reset(&mut self) {

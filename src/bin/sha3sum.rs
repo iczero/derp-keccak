@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
         let len = stdin.read(&mut buf[read_offset..])?;
         if len + read_offset == byterate {
             unsafe {
-                keccak.absorb_direct_unchecked(&buf);
+                keccak.absorb_block_unchecked(&buf);
             }
             read_offset = 0;
         } else if len == 0 {
@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let out = keccak.squeeze(bitrate, 256 / 8);
+    let out = keccak.squeeze_many(bitrate, 256 / 8);
     println!("{}", bytes_to_hex(&out));
     Ok(())
 }
