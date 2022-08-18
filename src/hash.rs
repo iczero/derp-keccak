@@ -139,6 +139,11 @@ impl<
     }
 }
 
+// SHA-3 instances (SHA3-224 not supported because absurd reasons)
 pub type SHA3_256 = KeccakHashState<512, 136, 32, 0b10, 2>;
 pub type SHA3_384 = KeccakHashState<768, 104, 48, 0b10, 2>;
 pub type SHA3_512 = KeccakHashState<1024, 72, 64, 0b10, 2>;
+
+// fixed length SHAKE instances
+pub type SHAKE128_256 = KeccakHashState<256, 168, 32, 0b1111, 4>;
+pub type SHAKE256_512 = KeccakHashState<512, 136, 64, 0b1111, 4>;

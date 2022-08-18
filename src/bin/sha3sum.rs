@@ -1,5 +1,7 @@
 #![feature(slice_as_chunks)]
-use derp_keccak::hash::{Digest, KeccakHash, SHA3_256, SHA3_384, SHA3_512};
+use derp_keccak::hash::{
+    Digest, KeccakHash, SHA3_256, SHA3_384, SHA3_512, SHAKE128_256, SHAKE256_512,
+};
 use derp_keccak::util::bytes_to_hex;
 use derp_keccak::Keccak;
 use std::io::{BufReader, Read};
@@ -60,16 +62,22 @@ fn main() -> anyhow::Result<()> {
         match args[1].as_str() {
             "256" => {
                 main_keccakhash(SHA3_256::new())?;
-            },
+            }
             "384" => {
                 main_keccakhash(SHA3_384::new())?;
-            },
+            }
             "512" => {
                 main_keccakhash(SHA3_512::new())?;
-            },
+            }
+            "shake128" => {
+                main_keccakhash(SHAKE128_256::new())?;
+            }
+            "shake256" => {
+                main_keccakhash(SHAKE256_512::new())?;
+            }
             "old" => {
                 main_old()?;
-            },
+            }
             _ => {
                 eprintln!("invalid hash length");
             }
