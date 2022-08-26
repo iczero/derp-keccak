@@ -130,11 +130,10 @@ impl<
             PAD_BITS,
             PAD_BITS_LEN,
         );
-        let digest_bytes = self.state.squeeze_many(Self::RATE, DIGEST_BYTES);
         let mut digest = DigestBytes {
             data: [0u8; DIGEST_BYTES],
         };
-        digest.data.copy_from_slice(&digest_bytes);
+        self.state.squeeze_into(Self::RATE, &mut digest.data);
         digest
     }
 }

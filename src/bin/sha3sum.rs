@@ -31,7 +31,7 @@ fn main_old() -> anyhow::Result<()> {
         }
     }
 
-    let out = keccak.squeeze_many(bitrate, 256 / 8);
+    let out = keccak.squeeze_vec(bitrate, 256 / 8);
     println!("{}", bytes_to_hex(&out));
     Ok(())
 }

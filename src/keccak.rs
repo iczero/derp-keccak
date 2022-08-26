@@ -255,16 +255,31 @@ impl Keccak {
         self.keccakf();
     }
 
-    pub fn squeeze_many(&mut self, r: usize, byte_len: usize) -> Vec<u8> {
+    pub fn squeeze_into(&mut self, r: usize, dest: &mut [u8]) {
+        assert!(r % 64 == 0, "bitrate must be a multiple of 64");
+        assert!(r <= 1600, "bitrate exceeds state length");
         let byte_rate = r / 8;
-        let buf_capacity: usize = ((byte_len + byte_rate - 1) / byte_rate) * byte_rate;
-        let mut buf: Vec<u8> = Vec::with_capacity(buf_capacity);
-        buf.resize(buf_capacity, 0u8);
-        for i in (0..byte_len).step_by(byte_rate) {
-            self.squeeze_block(r, &mut buf[i..i + byte_rate]);
+        let mut index = 0;
+        while index + byte_rate <= dest.len() {
+            unsafe {
+                self.squeeze_block_unchecked(&mut dest[index..index + byte_rate]);
+            }
+            index += byte_rate;
         }
-        buf.truncate(byte_len);
-        buf
+        if index < dest.len() {
+            // last block (partial)
+            assert!((&dest[index..]).len() < byte_rate);
+            unsafe {
+                self.squeeze_block_unchecked(&mut dest[index..]);
+            }
+        }
+    }
+
+    pub fn squeeze_vec(&mut self, r: usize, byte_length: usize) -> Vec<u8> {
+        let mut vec: Vec<u8> = Vec::with_capacity(byte_length);
+        vec.resize(byte_length, 0);
+        self.squeeze_into(r, &mut vec);
+        vec
     }
 
     pub fn duplex_block(&mut self, r: usize, squeeze_to: &mut [u8], absorb_from: &[u8]) {
